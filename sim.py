@@ -49,6 +49,9 @@ class GameSim:
         def social(self) -> np.number:
             return self().sum()
 
+        def max(self) -> np.number:
+            return self().max()
+
     def __init__(self, game: GameBase, rule: UpdateRule, regret_types=[]):
         self.game = game
         self.rule = rule

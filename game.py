@@ -2,8 +2,6 @@ import numpy as np
 from typing import TypeVar, Generic, List, Tuple, Dict, Callable, Union, Optional, Any, Type
 from abc import ABC, abstractmethod
 import string
-import torch
-from torch import nn
 
 # R^n * R^(n*m)
 GameResult = Tuple[np.ndarray, np.ndarray]
@@ -28,29 +26,29 @@ class GameBase(ABC):
 
 class MultilinearGame(GameBase):
     def __init__(self, weight: np.ndarray):
-        wt = torch.tensor(weight)
-        self.weight = wt
-        self.m = wt.shape[1]
-        self.n = wt.ndim - 1
-        assert self.n == wt.shape[0]
+        self.weight = weight
+        self.m = weight.shape[1]
+        self.n = weight.ndim - 1
+        assert self.n == weight.shape[0]
         chars = string.ascii_lowercase
         self.einsum_str = '{}{},{}->{}'.format(
             chars[self.n], chars[:self.n], ','.join(chars[:self.n]), chars[self.n]
         )
-        self.single_einsum_str = '{},{}'.format(
-            chars[:self.n], ','.join(chars[:self.n])
-        )
+        self.single_einsum_str = [
+                '{},{}->{}'.format(
+                chars[:self.n], ','.join(chars[:self.n]), chars[i]
+            )
+            for i in range(self.n)
+        ]
         
     def value(self, *args: np.ndarray) -> np.ndarray:
-        inputs = list(map(lambda x: torch.tensor(x), args))
-        outs = torch.einsum(self.einsum_str, self.weight, *inputs)
-        return np.array(outs.detach().numpy())
+        return np.einsum(self.einsum_str, self.weight, *args)
 
     def gradient(self, *args: np.ndarray) -> np.ndarray:
         l : List[np.ndarray] = []
         for i in range(self.n):
-            g_inputs = list(map(lambda x: torch.tensor(x, requires_grad=True), args))
-            torch.einsum(self.single_einsum_str, self.weight[i], *g_inputs).backward()
-            l.append(np.array(g_inputs[i].grad.detach().numpy()))
+            g_inputs = list(args)
+            g_inputs[i] = np.ones_like(g_inputs[i])
+            l.append(np.einsum(self.single_einsum_str[i], self.weight[i], *g_inputs))
         
         return np.array(l)
