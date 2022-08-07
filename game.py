@@ -23,7 +23,6 @@ class GameBase(ABC):
         return self(*args)[1]
 
     # R^(n*m) -> R^n * R* ^ (n*m)
-    @abstractmethod
     def __call__(self, *args: np.ndarray) -> GameResult:
         return self.value(*args), self.gradient(*args)
 
@@ -41,15 +40,17 @@ class MultilinearGame(GameBase):
         self.single_einsum_str = '{},{}'.format(
             chars[:self.n], ','.join(chars[:self.n])
         )
-    
-    def __call__(self, *args: np.ndarray) -> GameResult:
+        
+    def value(self, *args: np.ndarray) -> np.ndarray:
         inputs = list(map(lambda x: torch.tensor(x), args))
         outs = torch.einsum(self.einsum_str, self.weight, *inputs)
-        assert outs.shape == (self.n, )
+        return np.array(outs.detach().numpy())
+
+    def gradient(self, *args: np.ndarray) -> np.ndarray:
         l : List[np.ndarray] = []
         for i in range(self.n):
             g_inputs = list(map(lambda x: torch.tensor(x, requires_grad=True), args))
             torch.einsum(self.single_einsum_str, self.weight[i], *g_inputs).backward()
             l.append(np.array(g_inputs[i].grad.detach().numpy()))
-
-        return np.array(outs.detach().numpy()), np.array(l)
+        
+        return np.array(l)
