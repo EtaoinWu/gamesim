@@ -6,6 +6,7 @@ import string
 # R^n * R^(n*m)
 GameResult = Tuple[np.ndarray, np.ndarray]
 
+
 class GameBase(ABC):
     @abstractmethod
     def __init__(self):
@@ -23,6 +24,7 @@ class GameBase(ABC):
     # R^(n*m) -> R^n * R* ^ (n*m)
     def __call__(self, *args: np.ndarray) -> GameResult:
         return self.value(*args), self.gradient(*args)
+
 
 class MultilinearGame(GameBase):
     def __init__(self, weight: np.ndarray):
