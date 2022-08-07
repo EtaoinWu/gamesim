@@ -25,8 +25,8 @@ class ProjSim(Proj):
         d = y.shape[0]
         u = np.sort(y)[::-1]
         v = np.cumsum(u)
-        ρ = max([j for j in range(d) if u[j] + (1 - v[j]) / j > 0])
-        λ = (1 - v[ρ]) / ρ
+        ρ = max([j for j in range(d) if u[j] + (1 - v[j]) / (j + 1) > 0])
+        λ = (1 - v[ρ]) / (ρ + 1)
         return np.maximum(y + λ, 0)
 
 
