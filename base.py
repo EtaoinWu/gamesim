@@ -22,12 +22,15 @@ class ProjCube(Proj):
 class ProjSim(Proj):
     @staticmethod
     def __call__(y: np.ndarray) -> np.ndarray:
-        d = y.shape[0]
-        u = np.sort(y)[::-1]
-        v = np.cumsum(u)
-        ρ = max([j for j in range(d) if u[j] + (1 - v[j]) / (j + 1) > 0])
-        λ = (1 - v[ρ]) / (ρ + 1)
-        return np.maximum(y + λ, 0)
+        if y.ndim == 1:
+            d = y.shape[0]
+            u = np.sort(y)[::-1]
+            v = np.cumsum(u)
+            ρ = max([j for j in range(d) if u[j] + (1 - v[j]) / (j + 1) > 0])
+            λ = (1 - v[ρ]) / (ρ + 1)
+            return np.maximum(y + λ, 0)
+        else:
+            return np.array([ProjSim.__call__(y[i]) for i in range(y.shape[0])])
 
 
 proj_nn = ProjNonnegative()
