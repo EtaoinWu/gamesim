@@ -9,6 +9,11 @@ from torch import nn
 GameResult = Tuple[np.ndarray, np.ndarray]
 
 class GameBase(ABC):
+    @abstractmethod
+    def __init__(self):
+        self.n = 0
+        self.m = 0
+
     # R^(n*m) -> R^n
     def value(self, *args: np.ndarray) -> np.ndarray:
         return self(*args)[0]
