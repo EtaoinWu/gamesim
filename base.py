@@ -30,6 +30,6 @@ class ProjSim(Proj):
         return np.maximum(y + λ, 0)
 
 
-proj = ProjNonnegative()
+proj_nn = ProjNonnegative()
 proj_cube = ProjCube()
 proj_sim = ProjSim()
