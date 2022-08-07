@@ -14,6 +14,6 @@ class GameSim:
     
     def play(self, steps : int) -> None:
         for _ in range(steps):
-            util, grad = self.game(self.state)
+            util, grad = self.game(*self.state)
             self.trajectory.append((self.state.copy(), util, grad))
             self.state, self.internal = self.rule(self.state, self.internal, util, grad)
