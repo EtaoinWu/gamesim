@@ -131,7 +131,7 @@ class BlumMansour(UpdateRule):
             new_unit_internals.append(new_internal)
         for i in range(play.shape[0]):
             Q = np.array([new_plays[j][i]
-                         for j in range(len(new_plays))]).transpose()
+                         for j in range(len(new_plays))])
             evals, evecs = np.linalg.eig(Q.T)
             evec1 = evecs[:, np.isclose(evals, 1)][:, 0]
             stationary = (evec1 / evec1.sum()).real
