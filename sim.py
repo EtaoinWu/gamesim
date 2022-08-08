@@ -4,7 +4,6 @@ from game import *
 from rules import *
 import itertools
 
-
 RewriteFunc = List[int]
 RewriteType = Union[Sequence[RewriteFunc],
                     None, Literal["swap"], Literal["internal"]]
@@ -80,7 +79,7 @@ class GameSim(GameSimBase):
             for _, regret_recorder in self.regret_recorders.items():
                 regret_recorder.play(self.state, util)
             self.state, self.internal = self.rule(
-                self.state, self.internal, util, grad)
+                self.state, self.internal, util, grad, len(self.trajectory))
 
     def rewrites(self, f: RewriteType) -> Sequence[RewriteFunc]:
         if f is None:
@@ -110,3 +109,11 @@ class GameSim(GameSimBase):
 
     def max_regret(self, rewrite_functions: RewriteType = None) -> np.number:
         return self.regret(rewrite_functions).max()
+
+    def path_length(self, order: Union[int, float, None] = None, power: float = 1):
+        return np.cumsum(
+            np.linalg.norm(
+                np.diff(np.array([a for a, _, _ in self.trajectory]), axis=0),
+                axis=-1,
+                ord=order) ** power
+            , axis=0)
