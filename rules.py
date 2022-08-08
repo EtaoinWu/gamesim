@@ -80,17 +80,18 @@ class OFTRL(UpdateRule):
     arXiv, Apr. 24, 2022. doi: 10.48550/arXiv.2204.11417.
     """
 
-    def __init__(self, lr: LearningRate, proj: Proj, barrier: Callable[[np.ndarray], float]):
+    def __init__(self, lr: LearningRate, proj: Proj, barrier: Callable[[np.ndarray], float], optimism: float = 1):
         self.lr = lr
         self.proj = proj
         self.barrier = barrier
+        self.optimism = optimism
 
     def init_internal(self, n, m) -> np.ndarray:
         return np.array([(np.zeros(m)) for _ in range(n)])
 
     def __call__(self, play: np.ndarray, internal: np.ndarray, util: np.ndarray, grad: np.ndarray, T: int) -> UpdateResult:
         eta = learning_rate(self.lr, T)
-        total_util = internal + grad + grad
+        total_util = internal + grad * (self.optimism + 1)
         new_play = np.zeros_like(play)
         for i in range(play.shape[0]):
             def f(x):
