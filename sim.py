@@ -65,7 +65,7 @@ class GameSim(GameSimBase):
         self.rule = rule
         self.n = game.n
         self.m = game.m
-        self.state = np.zeros((self.n, self.m))
+        self.state = np.ones((self.n, self.m)) / self.m
         self.internal = rule.init_internal(self.n, self.m)
         self.trajectory: List[Tuple[np.ndarray, np.ndarray, np.ndarray]] = []
         self.regret_recorders = {rewrite_type: self.RegretRecorder(self, self.rewrites(rewrite_type)) for rewrite_type
