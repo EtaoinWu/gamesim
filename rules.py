@@ -73,6 +73,21 @@ class ExtraGradient(UpdateRule):
             return self.proj(internal[1] - eta * grad), (not internal[0], play)
 
 
+class OFTRL_l2(UpdateRule):
+    def __init__(self, lr: LearningRate, proj: Proj, optimism: float = 1):
+        self.lr = lr
+        self.proj = proj
+        self.optimism = optimism
+
+    def init_internal(self, n, m) -> np.ndarray:
+        return np.array([(np.zeros(m)) for _ in range(n)])
+
+    def __call__(self, play: np.ndarray, internal: np.ndarray, util: np.ndarray, grad: np.ndarray, T: int) -> UpdateResult:
+        eta = learning_rate(self.lr, T)
+        total_util = internal + grad * (self.optimism + 1)
+        return self.proj(-eta * total_util), internal + grad
+
+
 class OFTRL(UpdateRule):
     """
     Ioannis Anagnostides, Gabriele Farina, Christian Kroer, Chung-Wei Lee, Haipeng Luo, and Tuomas Sandholm,
@@ -105,6 +120,9 @@ class OFTRL(UpdateRule):
 
 def log_barrier(x: np.ndarray) -> float:
     return -np.log(np.maximum(x, 1e-10)).sum()
+
+def l2_regularizer(x: np.ndarray) -> float:
+    return 0.5 * float(np.linalg.norm(x, ord=2)) ** 2
 
 
 class BlumMansour(UpdateRule):
