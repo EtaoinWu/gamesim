@@ -28,7 +28,7 @@ class ProjNonnegative(Proj):
         return np.maximum(v, 0)
 
     def best_pure(self, v: np.ndarray) -> np.ndarray:
-        return self.__call__(v)
+        return (v > 0).astype(float)
 
 
 class ProjCube(Proj):
@@ -40,27 +40,28 @@ class ProjCube(Proj):
         return (v > 0).astype(float)
 
 
-class ProjBall(Proj):
-    def __init__(self, ord: Any):
-        self.ord = ord
-        self.dual_ord = holder_conjugate(ord)
+class ProjUnbounded(Proj):
+    @staticmethod
+    def __call__(v: np.ndarray) -> np.ndarray:
+        return v
 
-    def __call__(self, y: np.ndarray) -> np.ndarray:
-        if y.ndim == 1:
-            ρ = np.linalg.norm(y, ord=self.ord)
-            return min(1, 1. / ρ) * y
-        else:
-            return np.array([self(y[i]) for i in range(y.shape[0])])
+    def best_pure(self, v: np.ndarray) -> np.ndarray:
+        return np.zeros_like(v)
 
-    def best_pure(self, y: np.ndarray) -> np.ndarray:
-        if y.ndim == 1:
-            if self.ord == 1:
-                return np.sign(y) * (np.arange(y.shape[0]) == np.argmax(np.abs(y))).astype(float)
-            x = np.abs(y) ** (self.dual_ord - 1) * np.sign(y)
-            ρ = np.linalg.norm(x, ord=self.ord)
-            return 1. / ρ * x
-        else:
-            return np.array([self(y[i]) for i in range(y.shape[0])])
+
+class ProjDimension(Proj):
+    def __init__(self, base: np.ndarray):
+        self.base = base
+
+    def __call__(self, v: np.ndarray) -> np.ndarray:
+        if v.ndim < self.base.ndim:
+            return v
+        if v.ndim > self.base.ndim:
+            return np.array([self(v[i]) for i in range(v.shape[0])])
+        return np.maximum(v, self.base)
+
+    def best_pure(self, v: np.ndarray) -> np.ndarray:
+        return np.zeros_like(v)
 
 
 # https://arxiv.org/abs/1309.1541
@@ -83,11 +84,46 @@ class ProjSim(Proj):
             i = y.argmax()
             return (np.arange(y.shape[0]) == i).astype(float)
         else:
-            return np.array([ProjSim.__call__(y[i]) for i in range(y.shape[0])])
+            return np.array([ProjSim.best_pure(y[i]) for i in range(y.shape[0])])
+
+class ProjBall(Proj):
+    def __init__(self, ord: Any):
+        self.ord = ord
+        self.dual_ord = holder_conjugate(ord)
+
+    def __call__(self, y: np.ndarray) -> np.ndarray:
+        if y.ndim == 1:
+            if self.ord == 2:
+                ρ = np.linalg.norm(y, ord=self.ord)
+                return min(1, 1. / ρ) * y
+            elif self.ord == 1:
+                # projection onto L1 ball
+                x = np.abs(y)
+                if np.sum(x) <= 1:
+                    return y
+                z = ProjSim.__call__(x)
+                return np.sign(y) * z
+            elif self.ord == np.inf:
+                # projection onto Linf ball
+                return y.clip(-1, 1)
+        else:
+            return np.array([self(y[i]) for i in range(y.shape[0])])
+
+    def best_pure(self, y: np.ndarray) -> np.ndarray:
+        if y.ndim == 1:
+            if self.ord == 1:
+                return np.sign(y) * (np.arange(y.shape[0]) == np.argmax(np.abs(y))).astype(float)
+            x = np.abs(y) ** (self.dual_ord - 1) * np.sign(y)
+            ρ = np.linalg.norm(x, ord=self.ord)
+            return 1. / ρ * x
+        else:
+            return np.array([self.best_pure(y[i]) for i in range(y.shape[0])])
 
 
+proj_trivial = ProjUnbounded()
 proj_nn = ProjNonnegative()
 proj_cube = ProjCube()
 proj_sim = ProjSim()
+proj_linfball = ProjBall(np.inf)
 proj_l2ball = ProjBall(2)
 proj_l1ball = ProjBall(1)
