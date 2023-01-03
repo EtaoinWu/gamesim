@@ -97,11 +97,17 @@ class GameSim(GameSimBase):
             self.grad_trajectory.append(grad)
             self.util_trajectory.append(util)
 
-        def __call__(self) -> np.ndarray:
+        def __call__(self, pure=None) -> np.ndarray:
             temp = - np.swapaxes(
                 np.array(self.grad_trajectory), 0, 1).cumsum(axis=1)
-            best_pure = self.proj.best_pure(temp)
-            return np.einsum('ijk,ijk->ij', temp, best_pure) - np.swapaxes(np.array(self.util_trajectory), 0, 1).cumsum(axis=1)
+            best_pure = self.x_star(temp)
+            if pure == 'last':
+                pure = best_pure[:, -1, :]
+            if isinstance(pure, np.ndarray):
+                return np.einsum('ijk,ik->ij', temp, pure) - np.swapaxes(np.array(self.util_trajectory), 0, 1).cumsum(
+                    axis=1)
+            return np.einsum('ijk,ijk->ij', temp, best_pure) - np.swapaxes(np.array(self.util_trajectory), 0, 1).cumsum(
+                axis=1)
 
         def regret_part1(self) -> np.ndarray:
             temp = - np.swapaxes(
@@ -109,27 +115,29 @@ class GameSim(GameSimBase):
             best_pure = self.proj.best_pure(temp)
             return np.einsum('ijk,ijk->ij', temp, best_pure)
 
-        def x_star(self) -> np.ndarray:
-            temp = - np.swapaxes(
-                np.array(self.grad_trajectory), 0, 1).cumsum(axis=1)
+        def x_star(self, temp=None) -> np.ndarray:
+            if temp is None:
+                temp = - np.swapaxes(
+                    np.array(self.grad_trajectory), 0, 1).cumsum(axis=1)
             return self.proj.best_pure(temp)
 
     regret_recorders: dict[Sequence[RewriteFunc] | str | None, RegretRecorderBase]
 
-    def __init__(self, game: GameBase, rule: UpdateRule, proj: Proj, regret_types=[]):
+    def __init__(self, game: GameBase, rule: UpdateRule, proj: Proj, regret_types=[], init_state=None):
         self.game = game
         self.rule = rule
         self.proj = proj
         self.n = game.n
         self.m = game.m
-        self.state = np.ones((self.n, self.m)) / self.m
+        self.state = np.ones((self.n, self.m)) / self.m if init_state is None else init_state
         self.internal = rule.init_internal(self.n, self.m)
         self.trajectory: List[GameSim.Trajectory] = []
         self.regret_types = regret_types
         self.normed_regret_recorder = GameSim.NormedRegretRecorder(
             self, self.regret_types, self.proj
         )
-        self.regret_recorders = {rewrite_type: GameSim.RegretRecorder(self, self.rewrites(rewrite_type), proj) for rewrite_type
+        self.regret_recorders = {rewrite_type: GameSim.RegretRecorder(self, self.rewrites(rewrite_type), proj) for
+                                 rewrite_type
                                  in regret_types}
         self.regret_recorders['normed'] = self.normed_regret_recorder
         self.regret_types = self.regret_recorders.keys()
@@ -174,10 +182,14 @@ class GameSim(GameSimBase):
     # def max_regret(self, rewrite_functions: RewriteType = None) -> np.number:
     #     return self.regret(rewrite_functions).max()
 
+    def point_trajectory(self):
+        return np.array([a for a, *_ in self.trajectory])
+
     def path_length(self, order: Union[int, float, None] = None, power: float = 1):
         return np.cumsum(
             np.linalg.norm(
-                np.diff(np.array([a for a, *_ in self.trajectory]), axis=0),
+                # np.diff(np.array([a for a, *_ in self.trajectory]), axis=0),
+                np.diff(self.point_trajectory(), axis=0),
                 axis=-1,
                 ord=order) ** power, axis=0)
 
