@@ -199,3 +199,9 @@ class GameSim(GameSimBase):
                 np.diff(np.array([a.grad for a in self.trajectory]), axis=0),
                 axis=-1,
                 ord=order) ** power, axis=0)
+
+def run_game_with_setup(game: GameBase, rule: UpdateRule, proj: Proj, regret_types: Sequence[RewriteType], steps: int,
+                        init_state=None) -> GameSim:
+    sim = GameSim(game, rule, proj, regret_types, proj(init_state) if init_state is not None else None)
+    sim.play(steps)
+    return sim

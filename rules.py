@@ -116,8 +116,7 @@ class ExtraGradient(UpdateRule):
     InternalType = Tuple[bool, np.ndarray]
 
     def init_internal(self, n, m) -> InternalType:
-        return True, np.array([self.proj(np.ones(m)) for _ in range(n)])
-
+        return True, None
     def __call__(self, play: np.ndarray, internal: InternalType, util: np.ndarray, grad: np.ndarray,
                  T: int) -> UpdateResult:
         eta = learning_rate(self.lr, T)
@@ -125,6 +124,26 @@ class ExtraGradient(UpdateRule):
             return self.proj(play - eta * grad), (not internal[0], play)
         else:
             return self.proj(internal[1] - eta * grad), (not internal[0], play)
+
+
+class MultiExtraGradient(UpdateRule):
+    def __init__(self, lr: LearningRate, proj: Proj, steps: int = 2):
+        self.lr = lr
+        self.proj = proj
+        self.steps = steps
+
+    InternalType = Tuple[int, np.ndarray]
+
+    def init_internal(self, n, m) -> InternalType:
+        return 0, None
+
+    def __call__(self, play: np.ndarray, internal: InternalType, util: np.ndarray, grad: np.ndarray,
+                 T: int) -> UpdateResult:
+        eta = learning_rate(self.lr, T)
+        current_x = play if internal[0] == 0 else internal[1]
+        now = internal[0]
+        next_step = (now + 1) % self.steps
+        return self.proj(current_x - eta * grad), (next_step, current_x)
 
 
 class ODA_l2(UpdateRule):
