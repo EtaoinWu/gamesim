@@ -3,6 +3,9 @@ from abc import ABC, abstractmethod
 
 from typing import TypeVar, Generic, List, Tuple, Dict, Callable, Union, Optional, Any, Type
 
+def norm_sq(x: np.ndarray, axis=None):
+    return np.sum(x ** 2, axis=axis)
+
 
 def holder_conjugate(x):
     if x == np.inf:
