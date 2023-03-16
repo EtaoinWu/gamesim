@@ -1,23 +1,29 @@
 # No Regret Learning Simulator
 
-This repo simulates several online learning algorithms on games.
+This repo simulates several online learning algorithms on multilinear games.
+
+## Learning Algorithms
+
+This repo implements the following learning algorithms:
+
+- Multiplicative Weights Update (MWU)
+- Gradient Descent (GD)
+- Optimistic Gradient Descent (OG)
+- Extragradient Method (EG)
+- Optimistic FTRL with arbitrary regularizer functions (OFTRL)
+  - optimized for L2 regularizer
+
+For two-players, each one of the algorithms above can be used in an alternating fashion.
+
+We also implement the Blum-Mansour transformation ([paper](https://www.jmlr.org/papers/volume8/blum07a/blum07a.pdf)), which converts a no-regret learning rule into a no-swap-regret learning rule.
+
 The algorithm in [arXiv:2204.11417](https://arxiv.org/abs/2204.11417) is implemented, and the experiment results in the paper is reproduced.
 
 ## Some the results:
 
-Under general-sum games with <=4 players, each with <=3 actions, gameplays are simulated with different learning rules (EG, OG, vanilla GD, and the two algorithms in the paper).
+**Positive results on OG, EG and AltGD**:
 
-The utilities are i.i.d. sampled from a uniform distribution. OG and EG both uses orthogonal projection to the probability simplex.
-
-**Negative results on OG and EG:**
-
-OG and EG both have linear swap regret.  
-The paper [arXiv:2204.11417v1] claims " $O(\log T)$ second-order path lengths" with their algorithm. OG and EG both have linear path lengths, implying that they don't converge.
-
-**Positive results on OG and EG**:
-
-I have been messing around with different parameters, and never found a case with a $\Omega(1)$ external regret for either OG or EG, under fixed learning rates. *All cases that I've experimented with **fixed learning rates** have finite external regret*. (This does not hold for normal GD.)  
-Sometimes the swap regret grows linearly, yet the external regret grows negative-linearly in $T$.
+I have been messing around with different parameters, and never found a case with a $\Omega(1)$ external regret for either OG, EG or AltGD (GD but two players alternate), under fixed learning rates. *All cases that I've experimented with **fixed learning rates** have finite external regret*. (This does not hold for normal GD.)  
 
 Under learning rate $\eta ∝ 1/T^k$ or $\eta ∝ {(1-\varepsilon)}^T$, the external regrets are unbounded.
 
