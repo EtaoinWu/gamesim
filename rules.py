@@ -1,12 +1,12 @@
 import numpy as np
-from typing import TypeVar, Generic, List, Tuple, Dict, Callable, Union, Optional, Any, Type, TypeAlias
+from typing import TypeVar, Generic, Callable, Union
 from abc import ABC, abstractmethod
 from base import Proj
 from itertools import islice, cycle
 import scipy
 import scipy.optimize
 
-UpdateResult = Tuple[np.ndarray, Any]
+T = TypeVar('T')
 LearningRate = Union[Callable[[int], float], float]
 
 
@@ -16,25 +16,22 @@ def learning_rate(lr: LearningRate, T: int) -> float:
     return lr
 
 
-class UpdateRule(ABC):
+class UpdateRule(ABC, Generic[T]):
     @abstractmethod
-    def init_internal(self, n: int, m: int):
-        return None
-
-    # play: array(n,m)
-    # internal: InternalType
-    # util: array(n)
-    # grad: array(n,m)
-    # T: int
-    # -> (array(n,m),InternalType)
-    @abstractmethod
-    def __call__(self, play: np.ndarray, internal: Any, util: np.ndarray, grad: np.ndarray, T: int) -> UpdateResult:
+    def init_internal(self, n: int, m: int) -> T:
         pass
 
-class Alternating(UpdateRule):
-    InternalType = tuple[int, list[Any]]
+    @abstractmethod
+    def __call__(self, 
+                 play: np.ndarray, # shape (n,m)
+                 internal: T, 
+                 util: np.ndarray, # shape (n,)
+                 grad: np.ndarray, # shape (n, m)
+                 T: int) -> tuple[np.ndarray, T]: # [0]: shape (n, m)
+        pass
 
-    def __init__(self, sub: Union[list[UpdateRule], UpdateRule]):
+class Alternating(Generic[T], UpdateRule[tuple[int, list[T]]]):
+    def __init__(self, sub: Union[list[UpdateRule[T]], UpdateRule[T]]):
         if isinstance(sub, list):
             self.sub = sub
         else:
@@ -43,8 +40,8 @@ class Alternating(UpdateRule):
     def init_internal(self, n: int, m: int):
         return 0, [x.init_internal(1, m) for x in islice(cycle(self.sub), n)]
 
-    def __call__(self, play: np.ndarray, internal: InternalType, util: np.ndarray, grad: np.ndarray,
-                 T: int) -> Tuple[np.ndarray, InternalType]:
+    def __call__(self, play: np.ndarray, internal: tuple[int, list[T]], util: np.ndarray, grad: np.ndarray,
+                 T: int) -> tuple[np.ndarray, tuple[int, list[T]]]:
         i, sub_internals = internal
         n = len(sub_internals)
         actual_time = T // n + 1
@@ -56,7 +53,7 @@ class Alternating(UpdateRule):
         return new_play, ((i + 1) % n, new_sub_internals)
 
 
-class MultiplicativeWeightUpdate(UpdateRule):
+class MultiplicativeWeightUpdate(UpdateRule[np.ndarray]):
     InternalType = np.ndarray
 
     def __init__(self, lr: LearningRate, proj: Proj, optimism: float = 0):
@@ -67,7 +64,12 @@ class MultiplicativeWeightUpdate(UpdateRule):
     def init_internal(self, n: int, m: int):
         return np.zeros(shape=(n, m))
 
-    def __call__(self, play: np.ndarray, internal: np.ndarray, util: np.ndarray, grad: np.ndarray, T: int) -> UpdateResult:
+    def __call__(self, 
+                 play: np.ndarray, 
+                 internal: np.ndarray, 
+                 util: np.ndarray, 
+                 grad: np.ndarray, 
+                 T: int) -> tuple[np.ndarray, np.ndarray]:
         lr = learning_rate(self.lr, T)
         new_internal = internal - grad
         new_internal -= np.max(new_internal, axis=1, keepdims=True)
@@ -77,7 +79,7 @@ class MultiplicativeWeightUpdate(UpdateRule):
         return new_play, new_internal
 
 
-class GradientDescent(UpdateRule):
+class GradientDescent(UpdateRule[None]):
     def __init__(self, lr: LearningRate, proj: Proj):
         self.lr = lr
         self.proj = proj
@@ -85,12 +87,12 @@ class GradientDescent(UpdateRule):
     def init_internal(self, n, m):
         return None
 
-    def __call__(self, play: np.ndarray, _, util: np.ndarray, grad: np.ndarray, T: int) -> UpdateResult:
+    def __call__(self, play: np.ndarray, _0: None, _1: np.ndarray, grad: np.ndarray, T: int) -> tuple[np.ndarray, None]:
         eta = learning_rate(self.lr, T)
         return self.proj(play - eta * grad), None
 
 
-class OptimisticGradient(UpdateRule):
+class OptimisticGradient(UpdateRule[np.ndarray]):
     def __init__(self, lr: LearningRate, proj: Proj):
         self.lr = lr
         self.proj = proj
@@ -99,7 +101,7 @@ class OptimisticGradient(UpdateRule):
         return np.array([self.proj(np.ones(m)) for _ in range(n)])
 
     def __call__(self, play: np.ndarray, internal: np.ndarray, util: np.ndarray, grad: np.ndarray,
-                 T: int) -> UpdateResult:
+                 T: int) -> tuple[np.ndarray, np.ndarray]:
         eta = learning_rate(self.lr, T)
         wholestep = internal
         # halfstep = play
@@ -108,17 +110,18 @@ class OptimisticGradient(UpdateRule):
         return next_halfstep, next_wholestep
 
 
-class ExtraGradient(UpdateRule):
+class ExtraGradient(UpdateRule[tuple[bool, np.ndarray]]):
     def __init__(self, lr: LearningRate, proj: Proj):
         self.lr = lr
         self.proj = proj
 
-    InternalType = Tuple[bool, np.ndarray]
+    InternalType = tuple[bool, np.ndarray]
 
     def init_internal(self, n, m) -> InternalType:
-        return True, None
+        return True, np.array([])
+    
     def __call__(self, play: np.ndarray, internal: InternalType, util: np.ndarray, grad: np.ndarray,
-                 T: int) -> UpdateResult:
+                 T: int) -> tuple[np.ndarray, InternalType]:
         eta = learning_rate(self.lr, T)
         if internal[0]:
             return self.proj(play - eta * grad), (not internal[0], play)
@@ -126,19 +129,19 @@ class ExtraGradient(UpdateRule):
             return self.proj(internal[1] - eta * grad), (not internal[0], play)
 
 
-class MultiExtraGradient(UpdateRule):
+class MultiExtraGradient(UpdateRule[tuple[int, np.ndarray]]):
     def __init__(self, lr: LearningRate, proj: Proj, steps: int = 2):
         self.lr = lr
         self.proj = proj
         self.steps = steps
 
-    InternalType = Tuple[int, np.ndarray]
+    InternalType = tuple[int, np.ndarray]
 
     def init_internal(self, n, m) -> InternalType:
-        return 0, None
+        return 0, np.array([])
 
     def __call__(self, play: np.ndarray, internal: InternalType, util: np.ndarray, grad: np.ndarray,
-                 T: int) -> UpdateResult:
+                 T: int) -> tuple[np.ndarray, InternalType]:
         eta = learning_rate(self.lr, T)
         current_x = play if internal[0] == 0 else internal[1]
         now = internal[0]
@@ -146,7 +149,7 @@ class MultiExtraGradient(UpdateRule):
         return self.proj(current_x - eta * grad), (next_step, current_x)
 
 
-class ODA_l2(UpdateRule):
+class ODA_l2(UpdateRule[np.ndarray]):
     def __init__(self, lr: LearningRate, proj: Proj, optimism: float = 1):
         self.lr = lr
         self.proj = proj
@@ -156,7 +159,7 @@ class ODA_l2(UpdateRule):
         return np.array([(np.ones(m)) for _ in range(n)])
 
     def __call__(self, play: np.ndarray, internal: np.ndarray, util: np.ndarray, grad: np.ndarray,
-                 T: int) -> UpdateResult:
+                 T: int) -> tuple[np.ndarray, np.ndarray]:
         eta = learning_rate(self.lr, T)
         total_util = internal + grad
         next_wholestep = self.proj(-eta * total_util)
@@ -164,7 +167,7 @@ class ODA_l2(UpdateRule):
         return next_halfstep, total_util
 
 
-class OFTRL_l2(UpdateRule):
+class OFTRL_l2(UpdateRule[np.ndarray]):
     def __init__(self, lr: LearningRate, proj: Proj, optimism: float = 1):
         self.lr = lr
         self.proj = proj
@@ -174,13 +177,13 @@ class OFTRL_l2(UpdateRule):
         return np.array([(np.ones(m)) for _ in range(n)])
 
     def __call__(self, play: np.ndarray, internal: np.ndarray, util: np.ndarray, grad: np.ndarray,
-                 T: int) -> UpdateResult:
+                 T: int) -> tuple[np.ndarray, np.ndarray]:
         eta = learning_rate(self.lr, T)
         total_util = internal + grad * (self.optimism + 1)
         return self.proj(-eta * total_util), internal + grad
 
 
-class OFTRL(UpdateRule):
+class OFTRL(UpdateRule[np.ndarray]):
     """
     Ioannis Anagnostides, Gabriele Farina, Christian Kroer, Chung-Wei Lee, Haipeng Luo, and Tuomas Sandholm,
     “Uncoupled Learning Dynamics with $O(\log T)$ Swap Regret in Multiplayer Games.”
@@ -197,7 +200,7 @@ class OFTRL(UpdateRule):
         return np.array([(np.ones(m)) for _ in range(n)])
 
     def __call__(self, play: np.ndarray, internal: np.ndarray, util: np.ndarray, grad: np.ndarray,
-                 T: int) -> UpdateResult:
+                 T: int) -> tuple[np.ndarray, np.ndarray]:
         eta = learning_rate(self.lr, T)
         total_util = internal + grad * (self.optimism + 1)
         new_play = np.zeros_like(play)
@@ -220,21 +223,23 @@ def l2_regularizer(x: np.ndarray) -> float:
     return 0.5 * float(np.linalg.norm(x, ord=2)) ** 2
 
 
-class BlumMansour(UpdateRule):
+class BlumMansour(Generic[T], UpdateRule[tuple[list[np.ndarray], list[T]]]):
     """
     Avrim Blum and Yishay Mansour, 
     “From External to Internal Regret,” 
     Journal of Machine Learning Research, vol. 8, no. 47, pp. 1307–1324, 2007.
     """
 
-    def __init__(self, unit: UpdateRule):
+    # InternalType = tuple[list[np.ndarray], list[T]]
+
+    def __init__(self, unit: UpdateRule[T]):
         self.unit = unit
 
-    def init_internal(self, n, m) -> Tuple[List[np.ndarray], List[np.ndarray]]:
+    def init_internal(self, n, m) -> tuple[list[np.ndarray], list[T]]:
         return [np.ones((n, m)) / m for _ in range(m)], [self.unit.init_internal(n, m) for _ in range(m)]
 
-    def __call__(self, play: np.ndarray, internal: np.ndarray, util: np.ndarray, grad: np.ndarray,
-                 T: int) -> UpdateResult:
+    def __call__(self, play: np.ndarray, internal: tuple[list[np.ndarray], list[T]], util: np.ndarray, grad: np.ndarray,
+                 T: int) -> tuple[np.ndarray, tuple[list[np.ndarray], list[T]]]:
         last_plays, unit_internals = internal
         new_plays = []
         new_unit_internals = []
